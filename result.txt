@@ -1,0 +1,1 @@
+{Albuquerque=-1.7/-1.7/-1.7, Cabo San Lucas=22.5/22.5/22.5, Dhaka=26.0/26.0/26.0, Erzurum=27.9/27.9/27.9, Gagnoa=44.6/44.6/44.6, Ho Chi Minh City=14.2/14.2/14.2, Ljubljana=15.0/15.0/15.0, Odienné=23.2/23.2/23.2, Skopje=22.4/22.4/22.4, Tel Aviv=3.0/3.0/3.0, Vientiane=29.4/29.4/29.4}
