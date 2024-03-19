@@ -22,6 +22,8 @@ type outputFields struct {
 // Used to validate future builds against.
 func CalculateExpectedOutput(filename string) string {
 
+	// 20m30.0046765s
+
 	var cityTemperatures = make(map[string]outputFields)
 
 	file, err := os.Open(filename)
