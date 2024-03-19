@@ -182,9 +182,9 @@ func ParseBytes(byteData []byte, mainIndex int64) {
 
 func parseEntry(cityByteSlice []byte, temperatureWholeByteSlice []byte, temperatureDecimalByte byte) {
 
-	temperature := append(temperatureWholeByteSlice, temperatureDecimalByte)
+	// temperature := append(temperatureWholeByteSlice, temperatureDecimalByte)
 
-	fmt.Println("parseEntry:", string(cityByteSlice), string(temperature))
+	// fmt.Println("parseEntry:", string(cityByteSlice), string(temperature))
 }
 
 func CombinePartialReads() {
@@ -200,7 +200,7 @@ func CombinePartialReads() {
 		partialRead := <-PartialReadChannel
 
 		if partialRead.index == 0 {
-			fmt.Println("FIRST: City:", string(partialRead.city), " - Temp:", string(append(partialRead.temperatureWhole, partialRead.decimalPoint)))
+			// fmt.Println("FIRST: City:", string(partialRead.city), " - Temp:", string(append(partialRead.temperatureWhole, partialRead.decimalPoint)))
 			continue
 		}
 
@@ -231,9 +231,13 @@ func CombinePartialReads() {
 				temperature = append(temperature, value.decimalPoint)
 			}
 
+			if len(city) < 1 {
+				fmt.Println(city)
+			}
+
 			delete(partialReadMap, partialRead.index)
 
-			fmt.Println("Combination: City:", string(city), " - Temp:", string(temperature))
+			// fmt.Println("Combination: City:", string(city), " - Temp:", string(temperature))
 		}
 	}
 }

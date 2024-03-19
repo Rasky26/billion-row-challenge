@@ -1,4 +1,4 @@
-package noroutines
+package movetoroutines
 
 import (
 	"billionRowChallenge/utilities"
@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 )
 
 type outputValues struct {
@@ -20,7 +21,10 @@ type outputValues struct {
 var output = make(map[string]outputValues)
 
 // main - Core entry point to the Billion Row Challenge
-func NoRoutineMain() {
+func BuildRoutinesMain() {
+
+	// var parserWaitGroup sync.WaitGroup
+	var entryWaitGroup sync.WaitGroup
 
 	// Get the current working directory
 	// TODO: Strip this out before the competition and hard-code the path to the file to speed up execution.
@@ -32,7 +36,7 @@ func NoRoutineMain() {
 
 	// Check the current file size in number of bytes
 	// TODO: See if this step is faster than monitoring for an EOF during the parsing
-	f, err := os.Stat(filepath.Join(executablePath, "measurements.csv"))
+	f, err := os.Stat(filepath.Join(executablePath, "m.csv"))
 	if err != nil {
 		panic(err)
 	}
@@ -42,7 +46,7 @@ func NoRoutineMain() {
 	finalBufferSize := bytesInFile - (numberOfRoutineCalls * utilities.BufferSize)
 
 	// file, err := os.Open(filepath.Join(executablePath, "measurements.csv"))
-	file, err := os.Open(filepath.Join(executablePath, "measurements.csv"))
+	file, err := os.Open(filepath.Join(executablePath, "m.csv"))
 	if err != nil {
 		panic(err)
 	}
@@ -54,17 +58,20 @@ func NoRoutineMain() {
 
 	// Start up the channel calls
 	for i := range int64(numberOfRoutineCalls) {
-		partialReader(file, utilities.BufferSize, i*utilities.BufferSize, i)
+		partialReader(file, utilities.BufferSize, i*utilities.BufferSize, i, &entryWaitGroup)
 	}
 
 	if finalBufferSize > 0 {
-		finalReader(file, finalBufferSize, numberOfRoutineCalls*utilities.BufferSize, int64(numberOfRoutineCalls))
+		finalReader(file, finalBufferSize, numberOfRoutineCalls*utilities.BufferSize, int64(numberOfRoutineCalls), &entryWaitGroup)
 	}
 
 	fmt.Println(output)
+
+	// parserWaitGroup.Wait()
+	entryWaitGroup.Wait()
 }
 
-func partialReader(file *os.File, bufferSize int64, offset int64, index int64) {
+func partialReader(file *os.File, bufferSize int64, offset int64, index int64, entryWaitGroup *sync.WaitGroup) {
 
 	// Set a consistent buffer that will last through the entirety of the go routine running.
 	var buffer = make([]byte, 100)
@@ -84,10 +91,10 @@ func partialReader(file *os.File, bufferSize int64, offset int64, index int64) {
 		panic(err)
 	}
 
-	parseBytes(buffer, index)
+	parseBytes(buffer, index, entryWaitGroup)
 }
 
-func finalReader(file *os.File, bufferSize int64, offset int64, index int64) {
+func finalReader(file *os.File, bufferSize int64, offset int64, index int64, entryWaitGroup *sync.WaitGroup) {
 
 	// Set a consistent buffer that will last through the entirety of the go routine running.
 	buffer := make([]byte, bufferSize)
@@ -107,11 +114,11 @@ func finalReader(file *os.File, bufferSize int64, offset int64, index int64) {
 		panic(err)
 	}
 
-	parseBytes(buffer, index)
+	parseBytes(buffer, index, entryWaitGroup)
 }
 
 // =======================================
-func parseBytes(byteData []byte, mainIndex int64) {
+func parseBytes(byteData []byte, mainIndex int64, entryWaitGroup *sync.WaitGroup) {
 
 	var initialSliceOffset int           // Indicates where the first full byte slice of values exists
 	var byteSliceStartingIndex int       // Starting index of the current line
@@ -176,7 +183,7 @@ func parseBytes(byteData []byte, mainIndex int64) {
 			byteSliceStartingIndex = index + 1
 
 			// Send the partial data for processing
-			combinePartialReads(mainIndex, cityByteSlice, temperatureWholeByteSlice, temperatureDecimalByte)
+			combinePartialReads(mainIndex, cityByteSlice, temperatureWholeByteSlice, temperatureDecimalByte, entryWaitGroup)
 
 			// Exit this loop
 			break
@@ -204,6 +211,7 @@ func parseBytes(byteData []byte, mainIndex int64) {
 					byteData[byteSliceStartingIndex:byteFields[utilities.SemiColonIndex].index],
 					byteData[byteFields[utilities.SemiColonIndex].index+1:byteFields[utilities.DecimalIndex].index],
 					byteData[byteFields[utilities.NewLineIndex].index-1],
+					entryWaitGroup,
 				)
 
 				// Reset the inspector for the next loop
@@ -264,10 +272,12 @@ func parseBytes(byteData []byte, mainIndex int64) {
 	}
 
 	// Send the partial data for processing
-	combinePartialReads(mainIndex+1, cityByteSlice, temperatureWholeByteSlice, temperatureDecimalByte)
+	combinePartialReads(mainIndex+1, cityByteSlice, temperatureWholeByteSlice, temperatureDecimalByte, entryWaitGroup)
 }
 
-func parseEntry(cityByteSlice []byte, temperatureWholeByteSlice []byte, temperatureDecimalByte byte) {
+func parseEntry(cityByteSlice []byte, temperatureWholeByteSlice []byte, temperatureDecimalByte byte, entryWaitGroup *sync.WaitGroup) {
+
+	entryWaitGroup.Add(1)
 
 	temperature := append(temperatureWholeByteSlice, temperatureDecimalByte)
 
@@ -276,28 +286,7 @@ func parseEntry(cityByteSlice []byte, temperatureWholeByteSlice []byte, temperat
 		panic(err)
 	}
 
-	addOutput(string(cityByteSlice), temperatureValue)
-
-	// value, ok := output[string(cityByteSlice)]
-	// if !ok {
-
-	// 	output[string(cityByteSlice)] = outputValues{
-	// 		min:   temperatureValue,
-	// 		max:   temperatureValue,
-	// 		total: temperatureValue,
-	// 		count: 1,
-	// 	}
-	// } else {
-	// 	if value.min > temperatureValue {
-	// 		value.min = temperatureValue
-	// 	} else if value.max < temperatureValue {
-	// 		value.max = temperatureValue
-	// 	}
-	// 	value.total += temperatureValue
-	// 	value.count++
-
-	// 	output[string(cityByteSlice)] = value
-	// }
+	addOutput(string(cityByteSlice), temperatureValue, entryWaitGroup)
 }
 
 type CombinedReadFields struct {
@@ -308,7 +297,7 @@ type CombinedReadFields struct {
 
 var partialReadMap = make(map[int64]CombinedReadFields)
 
-func combinePartialReads(index int64, city []byte, temperatureWhole []byte, decimalPoint byte) {
+func combinePartialReads(index int64, city []byte, temperatureWhole []byte, decimalPoint byte, entryWaitGroup *sync.WaitGroup) {
 
 	// type CombinedReadFields struct {
 	// 	city             []byte
@@ -319,6 +308,9 @@ func combinePartialReads(index int64, city []byte, temperatureWhole []byte, deci
 
 	if index == 0 {
 
+		// Add a wait group
+		entryWaitGroup.Add(1)
+
 		temperature := append(temperatureWhole, decimalPoint)
 
 		temperatureValue, err := strconv.Atoi(string(temperature))
@@ -326,7 +318,7 @@ func combinePartialReads(index int64, city []byte, temperatureWhole []byte, deci
 			panic(err)
 		}
 
-		addOutput(string(city), temperatureValue)
+		addOutput(string(city), temperatureValue, entryWaitGroup)
 		// fmt.Println("FIRST: City:", string(city), "- Temp:", string(append(temperatureWhole, decimalPoint)))
 		return
 	}
@@ -339,6 +331,9 @@ func combinePartialReads(index int64, city []byte, temperatureWhole []byte, deci
 			decimalPoint:     decimalPoint,
 		}
 	} else {
+
+		// Add a wait group
+		entryWaitGroup.Add(1)
 
 		var cityOutput []byte
 		var temperature []byte
@@ -365,12 +360,12 @@ func combinePartialReads(index int64, city []byte, temperatureWhole []byte, deci
 
 		delete(partialReadMap, index)
 
-		addOutput(string(cityOutput), temperatureValue)
+		addOutput(string(cityOutput), temperatureValue, entryWaitGroup)
 		// fmt.Println("Combination: City:", string(cityOutput), "- Temp:", string(temperature))
 	}
 }
 
-func addOutput(city string, temperature int) {
+func addOutput(city string, temperature int, entryWaitGroup *sync.WaitGroup) {
 
 	value, ok := output[city]
 	if !ok {
@@ -392,4 +387,7 @@ func addOutput(city string, temperature int) {
 
 		output[city] = value
 	}
+
+	// Remove a wait group
+	entryWaitGroup.Done()
 }
