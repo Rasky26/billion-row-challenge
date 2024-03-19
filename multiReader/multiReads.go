@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 )
 
 // ReaderFields - Key fields that come across the channel:
@@ -81,3 +82,76 @@ func FinalReader(file *os.File, bufferSize int64, offset int64, index int64) {
 }
 
 // TODO: See if string to int conversion is quicker. Or if I make a map of all the potential values and loop up those conversions there.
+
+// ============================ NEW STUFF ===================================
+// FileReadSectionFields - Fields that indicate what section of the file should be read and what the index of the read
+// is. The index is used to link together partial data read from the file.
+type FileReadSectionFields struct {
+	FileOffset int64
+	Index      int64
+}
+
+// FileReadSectionChannel - Channel that will accept the incoming byte reads, including the starting offset
+// and the set index of the read
+var FileReadSectionChannel = make(chan FileReadSectionFields)
+
+// PartialFileReader - Will read chunks out of the specified file and sends that data off for further processing
+func PartialFileReader(file *os.File, bufferSize int64, entryWaitGroup *sync.WaitGroup) {
+
+	// Set a consistent buffer that will last through the entirety of the go routine running.
+	var readBuffer = make([]byte, bufferSize)
+
+	// Loop forever
+	for {
+
+		// Listen for new read requests
+		readTarget := <-FileReadSectionChannel
+
+		// Move the reader to the offset value and read in the specified number of bytes
+		reader := io.NewSectionReader(file, readTarget.FileOffset, bufferSize)
+
+		// Put those byte values into the defined static buffer
+		n, err := reader.Read(readBuffer)
+
+		// TODO: Probably remove this error checking during the competition to speed up execution. It's bad to do, but speed wins here!
+		if errors.Is(err, io.EOF) {
+			if n < 1 {
+				panic(errors.New("some error"))
+			}
+			fmt.Println(readTarget.Index, "ERROR:", string(readBuffer[:n]))
+			panic(errors.New("some error 2"))
+		} else if err != nil {
+			panic(err)
+		}
+
+		// Send the buffer of bytes values off to be processed
+		go parsers.ParseByteBuffer(readBuffer, readTarget.Index, entryWaitGroup)
+	}
+}
+
+// FinalFileReader - Routine that simply manages the final read out of the file
+func FinalFileReader(file *os.File, bufferSize int64, offset int64, index int64, entryWaitGroup *sync.WaitGroup) {
+
+	// Create a buffer exactly equal to the last number of bytes that need to be read out of the file
+	var readBuffer = make([]byte, bufferSize)
+
+	// Move the reader to the offset value and read in the specified number of bytes
+	reader := io.NewSectionReader(file, offset, bufferSize)
+
+	// Put those byte values into the defined static buffer
+	n, err := reader.Read(readBuffer)
+
+	// TODO: Probably remove this error checking during the competition to speed up execution. It's bad to do, but speed wins here!
+	if errors.Is(err, io.EOF) {
+		if n < 1 {
+			panic(err)
+		}
+		fmt.Println(index, "ERROR:", string(readBuffer[:n]))
+		panic(err)
+	} else if err != nil {
+		panic(err)
+	}
+
+	// Fire off a routine to inspect the final values
+	go parsers.ParseByteBuffer(readBuffer, index, entryWaitGroup)
+}

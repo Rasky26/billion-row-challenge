@@ -10,3 +10,12 @@ const DecimalHex = 0x2e
 const SemiColonIndex = 0
 const DecimalIndex = 1
 const NewLineIndex = 2
+
+type OutputValues struct {
+	Min   int
+	Max   int
+	Total int
+	Count int
+}
+
+var OutputMap = make(map[string]OutputValues)
