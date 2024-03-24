@@ -1,8 +1,8 @@
 package utilities
 
-const BufferSize int64 = 100 // The amount of bytes that are read into the go routine buffer with each read
+const BufferSize int64 = 64 // The amount of bytes that are read into the go routine buffer with each read
 
-const NumberOfReaderRoutines = 1 // The amount of go routines that will be created and ready to read data processed through the reader
+const NumberOfReaderRoutines = 4 // The amount of go routines that will be created and ready to read data processed through the reader
 
 const NewLineHex = 0xa
 const SemicolonHex = 0x3b
@@ -19,3 +19,5 @@ type OutputValues struct {
 }
 
 var OutputMap = make(map[string]OutputValues)
+
+var Count *int

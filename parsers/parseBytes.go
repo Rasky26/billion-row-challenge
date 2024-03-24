@@ -252,11 +252,16 @@ type PartialEntryFields struct {
 	TemperatureField []byte
 	DecimalField     byte
 }
+type PartialEntryFieldsString struct { // FIX
+	City             string
+	TemperatureField string
+	DecimalField     string
+}
 
 // PartialEntryMap - Holds the partial entries that were parsed out of the main file. Holds the values on the key
 // value of the index from the loop. This index will link together which loop the partial read was parsed from and allow
 // for a quick association of those partial fields back into a whole field.
-var PartialEntryMap = make(map[int64]PartialEntryFields)
+var PartialEntryMap = make(map[int64]PartialEntryFieldsString)
 
 // PartialReadByteFields - Contains the partial information that was read from the file. Includes the index of the read, that
 // index will be used to link together partial reads.
@@ -266,10 +271,16 @@ type PartialReadByteFields struct {
 	TemperatureWhole []byte
 	DecimalPoint     byte
 }
+type PartialReadByteFieldsString struct {
+	Index            int64
+	City             string
+	TemperatureWhole string
+	DecimalPoint     string
+}
 
 // PartialReadChannel2 - Channel that will take in a partial read and either add it to a holding channel
 // or match that partial read with an existing partial read to create a new output entry
-var PartialReadChannel2 = make(chan PartialReadByteFields)
+var PartialReadChannel2 = make(chan PartialReadByteFieldsString)
 
 // ParseByteBuffer - Routine that will take in a buffer from the file and begin parsing the entries to split apart
 // the city, the whole temperature value, and the temperature decimal field.
@@ -297,6 +308,14 @@ func ParseByteBuffer(byteData []byte, mainIndex int64, entryWaitGroup *sync.Wait
 		{byteValue: utilities.DecimalHex},
 		{byteValue: utilities.NewLineHex},
 	}
+
+	// if strings.Contains(string(incomingByteData), "gzhou;") {
+	// 	fmt.Println(string(incomingByteData))
+	// }
+
+	// var byteData = make([]byte, utilities.BufferSize)
+	// n := copy(byteData, incomingByteData)
+	// fmt.Printf("%v %v %v\n", n, len(byteData), len(incomingByteData))
 
 	// Read the initial bytes until a newline character is reached. This first slice will require its own processing
 	// to link with any slice values found at the trailing end of a different reader.
@@ -340,14 +359,24 @@ func ParseByteBuffer(byteData []byte, mainIndex int64, entryWaitGroup *sync.Wait
 			headerOffset = index + 1           // Used to move the header for the array when looping below
 			byteSliceStartingIndex = index + 1 // Indicates where the next valid row of data will begin
 
+			// fmt.Printf("Initial Line:\n\tIndex: %v\n\tSemicolon: %v\n\tDecimal: %v\n\tNewLine: %v\n\tCity: %v\n\tTemperature: %v\n\tOffset: %v\n\n",
+			// 	mainIndex,
+			// 	byteFields[utilities.SemiColonIndex].index,
+			// 	byteFields[utilities.DecimalIndex].index,
+			// 	byteFields[utilities.NewLineIndex].index,
+			// 	string(cityByteSlice),
+			// 	string(append(temperatureWholeByteSlice, temperatureDecimalByte)),
+			// 	headerOffset,
+			// )
+
 			// Send the partial byte arrays over to be stored and linked together. This will usually contain
 			// only the ending values of the partial read and the `temperatureDecimalByte` value should usually
 			// be a value other than `0x00`.
-			PartialReadChannel2 <- PartialReadByteFields{
+			PartialReadChannel2 <- PartialReadByteFieldsString{
 				Index:            mainIndex,
-				City:             cityByteSlice,
-				TemperatureWhole: temperatureWholeByteSlice,
-				DecimalPoint:     temperatureDecimalByte,
+				City:             string(cityByteSlice),
+				TemperatureWhole: string(temperatureWholeByteSlice),
+				DecimalPoint:     string(temperatureDecimalByte),
 			}
 
 			// Exit this loop. All other entries (other than the final entry) will contain complete data.
@@ -370,6 +399,16 @@ func ParseByteBuffer(byteData []byte, mainIndex int64, entryWaitGroup *sync.Wait
 			// Once a newline character is found, signal that the full byte slice is set and reset
 			// the target byte for inspection back to the semicolon symbol
 			if targetByteToCheckFor > 2 {
+
+				// fmt.Printf("Regular Line:\n\tIndex: %v\n\tSemicolon: %v\n\tDecimal: %v\n\tNewLine: %v\n\tCity: %v\n\tTemperature: %v\n\tOffset: %v\n\n",
+				// 	mainIndex,
+				// 	byteFields[utilities.SemiColonIndex].index,
+				// 	byteFields[utilities.DecimalIndex].index,
+				// 	byteFields[utilities.NewLineIndex].index,
+				// 	string(byteData[byteSliceStartingIndex:byteFields[utilities.SemiColonIndex].index]),
+				// 	string(append(byteData[byteFields[utilities.SemiColonIndex].index+1:byteFields[utilities.DecimalIndex].index], byteData[byteFields[utilities.NewLineIndex].index-1])),
+				// 	headerOffset,
+				// )
 
 				// A full byte slice has been found and can be parsed
 				go ParseCompleteEntry(
@@ -433,14 +472,24 @@ func ParseByteBuffer(byteData []byte, mainIndex int64, entryWaitGroup *sync.Wait
 		temperatureDecimalByte = 0x00 // Set it to a `nil`, to indicate no value was found
 	}
 
+	// fmt.Printf("Last Line:\n\tIndex: %v\n\tSemicolon: %v\n\tDecimal: %v\n\tNewLine: %v\n\tCity: %v\n\tTemperature: %v\n\tOffset: %v\n\n",
+	// 	mainIndex,
+	// 	byteFields[utilities.SemiColonIndex].index,
+	// 	byteFields[utilities.DecimalIndex].index,
+	// 	byteFields[utilities.NewLineIndex].index,
+	// 	string(cityByteSlice),
+	// 	string(append(temperatureWholeByteSlice, temperatureDecimalByte)),
+	// 	headerOffset,
+	// )
+
 	// Send the partial byte arrays over to be stored and linked together. This will usually contain
 	// only the starting values of the partial read and the `temperatureDecimalByte` value should usually
 	// be `0x00`, indicating to the aggregator that this data is the prefix values.
-	PartialReadChannel2 <- PartialReadByteFields{
+	PartialReadChannel2 <- PartialReadByteFieldsString{
 		Index:            mainIndex + 1, // Increment by one, to make sure the aggregator can link these leading partial values with the next trailing partial values
-		City:             cityByteSlice,
-		TemperatureWhole: temperatureWholeByteSlice,
-		DecimalPoint:     temperatureDecimalByte,
+		City:             string(cityByteSlice),
+		TemperatureWhole: string(temperatureWholeByteSlice),
+		DecimalPoint:     string(temperatureDecimalByte),
 	}
 }
 
@@ -471,10 +520,12 @@ func ParseCompleteEntry(cityByteSlice []byte, temperatureWholeByteSlice []byte, 
 // Links together partial data by utilizing the index value from the read to determine which fields need
 // to be linked together. Once a field is fully linked together, send the information to the map to be aggregated
 // into the results.
-func PartialReadManager(entryWaitGroup *sync.WaitGroup) {
+func PartialReadManager(entryWaitGroup *sync.WaitGroup, numberOfRoutineCalls int64) {
 
-	var cityCompleteArray []byte        // Contains the combined partial reads and creates a full city name
-	var temperatureCompleteArray []byte // Contains the combined partial temperature reads and creates a complete temperature entry
+	// var cityCompleteArray []byte        // Contains the combined partial reads and creates a full city name
+	// var temperatureCompleteArray []byte // Contains the combined partial temperature reads and creates a complete temperature entry
+	var cityCompleteArray string        // FIX
+	var temperatureCompleteArray string // FIX
 
 	// Loop forever
 	for {
@@ -489,7 +540,8 @@ func PartialReadManager(entryWaitGroup *sync.WaitGroup) {
 			entryWaitGroup.Add(1)
 
 			// Combine the whole temperature value with the decimal value into a singular array
-			temperatureCompleteArray := append(partialEntry.TemperatureWhole, partialEntry.DecimalPoint)
+			// temperatureCompleteArray := append(partialEntry.TemperatureWhole, partialEntry.DecimalPoint)
+			temperatureCompleteArray := partialEntry.TemperatureWhole + partialEntry.DecimalPoint // FIX
 
 			// Convert the byte array to the temperature equivalent, multiplied by 10
 			temperatureValue, err := strconv.Atoi(string(temperatureCompleteArray))
@@ -503,7 +555,11 @@ func PartialReadManager(entryWaitGroup *sync.WaitGroup) {
 				Temperature: temperatureValue,
 			}
 
-			return
+			continue
+		}
+
+		if partialEntry.Index+1 > numberOfRoutineCalls {
+			continue
 		}
 
 		// Locate any existing partial entry within the map
@@ -511,7 +567,7 @@ func PartialReadManager(entryWaitGroup *sync.WaitGroup) {
 
 		// Create a new entry that will hold the partial values and store it until the matching partial entry is found
 		if !ok {
-			PartialEntryMap[partialEntry.Index] = PartialEntryFields{
+			PartialEntryMap[partialEntry.Index] = PartialEntryFieldsString{
 				City:             partialEntry.City,
 				TemperatureField: partialEntry.TemperatureWhole,
 				DecimalField:     partialEntry.DecimalPoint,
@@ -531,17 +587,23 @@ func PartialReadManager(entryWaitGroup *sync.WaitGroup) {
 		// partialRead: `[]byte{ame} []byte{26} 0x2`
 		//
 		// If the existing entry has a `nil` decimal field, then that entry STARTS with the valid city bytes
-		if value.DecimalField == 0x00 {
-			cityCompleteArray = append(value.City, partialEntry.City...)
-			temperatureCompleteArray = append(value.TemperatureField, partialEntry.TemperatureWhole...)
-			temperatureCompleteArray = append(temperatureCompleteArray, partialEntry.DecimalPoint)
+		if value.DecimalField == string(0x00) {
+			// cityCompleteArray = append(value.City, partialEntry.City...)
+			// temperatureCompleteArray = append(value.TemperatureField, partialEntry.TemperatureWhole...)
+			// temperatureCompleteArray = append(temperatureCompleteArray, partialEntry.DecimalPoint)
+			cityCompleteArray = value.City + partialEntry.City // FIX
+			temperatureCompleteArray = value.TemperatureField + partialEntry.TemperatureWhole
+			temperatureCompleteArray = temperatureCompleteArray + partialEntry.DecimalPoint
 		} else {
 
 			// Otherwise, the existing entry contains the ENDING byte values, and the incoming information should prepend
 			// it's information
-			cityCompleteArray = append(partialEntry.City, value.City...)
-			temperatureCompleteArray = append(partialEntry.TemperatureWhole, value.TemperatureField...)
-			temperatureCompleteArray = append(temperatureCompleteArray, value.DecimalField)
+			// cityCompleteArray = append(partialEntry.City, value.City...)
+			// temperatureCompleteArray = append(partialEntry.TemperatureWhole, value.TemperatureField...)
+			// temperatureCompleteArray = append(temperatureCompleteArray, value.DecimalField)
+			cityCompleteArray = partialEntry.City + value.City // FIX
+			temperatureCompleteArray = partialEntry.TemperatureWhole + value.TemperatureField
+			temperatureCompleteArray = temperatureCompleteArray + value.DecimalField
 		}
 
 		// Convert the temperature byte array into the integer value, multiplied by 10

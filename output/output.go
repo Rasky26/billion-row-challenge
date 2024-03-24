@@ -36,6 +36,8 @@ func AggregateEntryOutputs(outputMap map[string]utilities.OutputValues, entryWai
 				Count: 1,
 			}
 
+			entryWaitGroup.Done()
+
 			// Move to the next loop and listen for an output
 			continue
 		}
