@@ -617,5 +617,8 @@ func PartialReadManager(entryWaitGroup *sync.WaitGroup, numberOfRoutineCalls int
 			City:        string(cityCompleteArray),
 			Temperature: temperatureValue,
 		}
+
+		// To keep my sad little computer from starting on fire...
+		delete(PartialEntryMap, partialEntry.Index)
 	}
 }
